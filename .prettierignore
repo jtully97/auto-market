@@ -1,0 +1,6 @@
+pnpm-lock.yaml
+CHANGELOG.md
+**/dist
+**/.next
+apps/api/src/generated
+apps/web/components/ui

@@ -1,0 +1,50 @@
+name: Release
+
+# Conventional commits on main drive everything:
+#   1. release-please keeps a "chore(release): x.y.z" PR open with the next
+#      version (fix → patch, feat → minor, feat! / BREAKING CHANGE → major)
+#      and the generated CHANGELOG.md.
+#   2. Merging that PR tags vX.Y.Z, publishes a GitHub Release, then builds
+#      images tagged with the version and deploys staging → production.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.rp.outputs.release_created }}
+      version: ${{ steps.rp.outputs.version }}
+      tag: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - id: rp
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  deploy-staging:
+    needs: release-please
+    if: needs.release-please.outputs.released == 'true'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: staging
+      version: ${{ needs.release-please.outputs.version }}
+      ref: ${{ needs.release-please.outputs.tag }}
+    secrets: inherit
+
+  deploy-production:
+    needs: [release-please, deploy-staging]
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: production
+      version: ${{ needs.release-please.outputs.version }}
+      ref: ${{ needs.release-please.outputs.tag }}
+    secrets: inherit

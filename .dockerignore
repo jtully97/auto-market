@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/.next
+**/coverage
+**/.env
+**/.env.*
+.git
+.github
+infra
+docs
+*.md
+!apps/**/README.md
+apps/api/src/generated
