@@ -53,18 +53,34 @@ export const CRON_SCHEDULES: Partial<Record<JobName, string>> = {
 let boss: PgBoss | null = null;
 let starting: Promise<PgBoss> | null = null;
 
-export const getQueue = async (): Promise<PgBoss> => {
-  if (boss) return boss;
-  starting ??= (async () => {
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Start pg-boss, waiting for the database instead of crashing if it isn't up yet. */
+const startWithRetry = async (): Promise<PgBoss> => {
+  for (let attempt = 1; ; attempt++) {
     const instance = new PgBoss({ connectionString: env.DATABASE_URL, schema: 'pgboss' });
     instance.on('error', (err) => logger.error({ err }, 'pg-boss error'));
-    await instance.start();
-    for (const [name, policy] of Object.entries(QUEUE_POLICIES)) {
-      await instance.createQueue(name, policy);
+    try {
+      await instance.start();
+      for (const [name, policy] of Object.entries(QUEUE_POLICIES)) {
+        await instance.createQueue(name, policy);
+      }
+      return instance;
+    } catch (err) {
+      await instance.stop({ graceful: false }).catch(() => undefined);
+      const delay = Math.min(30_000, 1000 * 2 ** Math.min(attempt, 5));
+      logger.warn(
+        { err: (err as Error).message, attempt, retryInMs: delay },
+        'database not reachable yet, retrying',
+      );
+      await sleep(delay);
     }
-    boss = instance;
-    return instance;
-  })();
+  }
+};
+
+export const getQueue = async (): Promise<PgBoss> => {
+  if (boss) return boss;
+  starting ??= startWithRetry().then((instance) => (boss = instance));
   return starting;
 };
 

@@ -5,8 +5,10 @@ import { logger } from './core/logger.js';
 import { getQueue, stopQueue } from './core/queue/queue.js';
 
 const main = async () => {
-  await getQueue(); // the API enqueues jobs; workers run in the separate worker service
   const server = createApp().listen(env.PORT, () => logger.info(`API listening on :${env.PORT}`));
+  // The API only enqueues jobs (workers run separately). Connect in the background so the
+  // server stays up — and /readyz reports the problem — if the database is briefly unavailable.
+  void getQueue();
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'shutting down');

@@ -22,15 +22,29 @@ const forward = async (req: NextRequest, ctx: { params: Promise<{ path: string[]
   for (const h of HOP_BY_HOP) headers.delete(h);
 
   const hasBody = !['GET', 'HEAD'].includes(req.method);
-  const res = await fetch(url, {
-    method: req.method,
-    headers,
-    body: hasBody ? req.body : undefined,
-    redirect: 'manual',
-    cache: 'no-store',
-    // Node's fetch needs `duplex` to stream a request body (uploads).
-    ...(hasBody ? { duplex: 'half' } : {}),
-  } as RequestInit);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: req.method,
+      headers,
+      body: hasBody ? req.body : undefined,
+      redirect: 'manual',
+      cache: 'no-store',
+      // Node's fetch needs `duplex` to stream a request body (uploads).
+      ...(hasBody ? { duplex: 'half' } : {}),
+    } as RequestInit);
+  } catch {
+    // API down or unreachable: answer in the API's error shape so the UI shows a clear message.
+    return Response.json(
+      {
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: "We can't reach the AutoMarket servers right now. Please try again in a moment.",
+        },
+      },
+      { status: 503 },
+    );
+  }
 
   const out = new Headers(res.headers);
   out.delete('content-encoding');
